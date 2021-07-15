@@ -13,13 +13,22 @@ public:
 
     void                                               ToggleVSync();
     void                                               Resize(uint32_t, uint32_t);
-                                                       
+
     void                                               EndFrame(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>);
+
+    void                                               UpdateBufferResource(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>,
+                                                                            ID3D12Resource**, ID3D12Resource**,
+                                                                            size_t, size_t, const void*, 
+                                                                            D3D12_RESOURCE_FLAGS = D3D12_RESOURCE_FLAG_NONE)         const;
 
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> BeginFrame()                                                                  const;
     void                                               ClearRenderTarget(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>, FLOAT*) const;
+    void                                               SetRenderTarget(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2>)                                                             const;
 
     bool                                               IsInitialized()                                                               const;
+
+    std::shared_ptr<CommandQueue>                      GetCommandQueue()                                                             const;
+    Microsoft::WRL::ComPtr<ID3D12Device2>              GetDevice()                                                                   const;
 
 private:
 
@@ -48,6 +57,8 @@ private:
     uint64_t*                                           m_frameFenceValues;
     bool                                                m_isInitialized;
     bool                                                m_vSync;
+    D3D12_VIEWPORT                                      m_viewport;
+    D3D12_RECT                                          m_scissorRect;
 
     Microsoft::WRL::ComPtr<ID3D12Resource>*             m_backBuffers{};
     UINT                                                m_currentBackBufferIndex{};

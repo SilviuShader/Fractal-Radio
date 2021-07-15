@@ -15,10 +15,15 @@ Graphics::Graphics(const bool useWarp, const bool vSync, const uint8_t numFrames
     m_numFrames(numFrames),
     m_frameFenceValues(nullptr),
     m_isInitialized(false),
-    m_vSync(vSync)
+    m_vSync(vSync),
+    m_viewport(CD3DX12_VIEWPORT(0.0f, 0.0f, LONG_MAX, LONG_MAX)),
+    m_scissorRect(CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX))
 {
     EnableDebugLayer();
     m_allowTearing = CheckTearingSupport();
+
+    m_viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, Window::GetInstance()->GetClientWidth(),
+                                  Window::GetInstance()->GetClientHeight());
 
     const auto dxgiAdapter= GetAdapter(useWarp);
 
@@ -81,15 +86,9 @@ void Graphics::Resize(const uint32_t width, const uint32_t height)
     m_currentBackBufferIndex = m_swapChain->GetCurrentBackBufferIndex();
 
     UpdateRenderTargetViews(m_device, m_swapChain, m_renderTargetViewDescriptorHeap);
-}
 
-// Based on https://www.3dgep.com/learning-directx-12-1/#render
-void Graphics::ClearRenderTarget(ComPtr<ID3D12GraphicsCommandList2> commandList, FLOAT* clearColor) const
-{
-    const CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(m_renderTargetViewDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
-                                            m_currentBackBufferIndex, m_renderTargetViewDescriptorSize);
-
-    commandList->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
+    m_viewport = CD3DX12_VIEWPORT(0.0f, 0.0f,
+        static_cast<float>(width), static_cast<float>(height));
 }
 
 // Based on https://www.3dgep.com/learning-directx-12-1/#render
@@ -116,6 +115,48 @@ void Graphics::EndFrame(ComPtr<ID3D12GraphicsCommandList2> commandList)
     m_commandQueue->WaitForFenceValue(m_frameFenceValues[m_currentBackBufferIndex]);
 }
 
+// Based on https://www.3dgep.com/learning-directx-12-2/#tutorial2updatebufferresource
+void Graphics::UpdateBufferResource(const ComPtr<ID3D12GraphicsCommandList2> commandList,
+    ID3D12Resource** destinationResource, ID3D12Resource** intermediateResource,
+    const size_t numElements, const size_t elementSize, const void* bufferData,
+    const D3D12_RESOURCE_FLAGS flags) const
+{
+    const size_t bufferSize = numElements * elementSize;
+
+    auto destHeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+    auto destResourceDesc = CD3DX12_RESOURCE_DESC::Buffer(bufferSize, flags);
+
+    ThrowIfFailed(m_device->CreateCommittedResource(
+        &destHeapProperties,
+        D3D12_HEAP_FLAG_NONE,
+        &destResourceDesc,
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        nullptr,
+        IID_PPV_ARGS(destinationResource)));
+
+    if (bufferData)
+    {
+        auto intermediateHeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+        auto intermediateResourceDesc = CD3DX12_RESOURCE_DESC::Buffer(bufferSize);
+        ThrowIfFailed(m_device->CreateCommittedResource(
+            &intermediateHeapProperties,
+            D3D12_HEAP_FLAG_NONE,
+            &intermediateResourceDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(intermediateResource)));
+
+        D3D12_SUBRESOURCE_DATA subresourceData;
+        subresourceData.pData = bufferData;
+        subresourceData.RowPitch = bufferSize;
+        subresourceData.SlicePitch = subresourceData.RowPitch;
+
+        UpdateSubresources(commandList.Get(),
+            *destinationResource, *intermediateResource,
+            0, 0, 1, &subresourceData);
+    }
+}
+
 // Based on https://www.3dgep.com/learning-directx-12-1/#render
 ComPtr<ID3D12GraphicsCommandList2> Graphics::BeginFrame() const
 {
@@ -131,10 +172,39 @@ ComPtr<ID3D12GraphicsCommandList2> Graphics::BeginFrame() const
     return commandList;
 }
 
+// Based on https://www.3dgep.com/learning-directx-12-1/#render
+void Graphics::ClearRenderTarget(ComPtr<ID3D12GraphicsCommandList2> commandList, FLOAT* clearColor) const
+{
+    const CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(m_renderTargetViewDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+        m_currentBackBufferIndex, m_renderTargetViewDescriptorSize);
+
+    commandList->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
+}
+
+void Graphics::SetRenderTarget(ComPtr<ID3D12GraphicsCommandList2> commandList) const
+{
+    const CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(m_renderTargetViewDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+        m_currentBackBufferIndex, m_renderTargetViewDescriptorSize);
+
+    commandList->RSSetViewports(1, &m_viewport);
+    commandList->RSSetScissorRects(1, &m_scissorRect);
+
+    commandList->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
+}
 
 bool Graphics::IsInitialized() const
 {
     return m_isInitialized;
+}
+
+shared_ptr<CommandQueue> Graphics::GetCommandQueue() const
+{
+    return m_commandQueue;
+}
+
+ComPtr<ID3D12Device2> Graphics::GetDevice() const
+{
+    return m_device;
 }
 
 void Graphics::FreeBackBuffers()
