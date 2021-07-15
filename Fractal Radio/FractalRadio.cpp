@@ -12,11 +12,12 @@ FractalRadio::FractalRadio(const shared_ptr<Graphics> graphics) :
 void FractalRadio::Update()
 {
 }
+
 void FractalRadio::Render()
 {
     FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
 
-    m_graphics->BeginFrame();
-    m_graphics->ClearRenderTarget(clearColor);
-    m_graphics->EndFrame();
+    const auto commandList = m_graphics->BeginFrame();
+    m_graphics->ClearRenderTarget(commandList, clearColor);
+    m_graphics->EndFrame(commandList);
 }
