@@ -1,9 +1,11 @@
 #include "pch.h"
+
 #include "Window.h"
 
 #pragma warning (disable : 6387)
 
 using namespace std;
+using namespace std::chrono;
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
@@ -18,6 +20,8 @@ Window::Window(HINSTANCE hInstance, const wchar_t* applicationName, const uint32
     m_clientWidth(clientWidth),
     m_clientHeight(clientHeight)
 {
+
+    m_lastTimePoint = high_resolution_clock::now();
     SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     RegisterWindowClass(hInstance, WINDOW_CLASS_NAME);
     m_hWnd = CreateWindow(WINDOW_CLASS_NAME, hInstance, applicationName, m_clientWidth, m_clientHeight);
@@ -173,6 +177,8 @@ HWND Window::CreateWindow(const wchar_t* windowClassName, HINSTANCE hInstance, c
         assert(false);
     }
 
+    ShowCursor(false);
+
     return hWnd;
 }
 
@@ -214,8 +220,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT message, const WPARAM wParam, con
         switch (message)
         {
         case WM_PAINT:
-            instance->m_demo->Update();
-            instance->m_demo->Render();
+            {
+                const auto crtTimePoint = high_resolution_clock::now();
+                const auto difference = crtTimePoint - instance->m_lastTimePoint;
+                const double deltaTime = difference.count() * 1e-9;
+                instance->m_lastTimePoint = crtTimePoint;
+
+                instance->m_demo->Update(deltaTime);
+                instance->m_demo->Render();
+            }
             break;
         case WM_SYSKEYDOWN:
         case WM_KEYDOWN:
@@ -228,6 +241,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT message, const WPARAM wParam, con
                     instance->m_demo->GetGraphics()->ToggleVSync();
                     break;
                 case VK_ESCAPE:
+                    instance->m_demo->GetGraphics()->GetCommandQueue()->Flush();
                     PostQuitMessage(0);
                     break;
                 case VK_RETURN:
@@ -261,7 +275,30 @@ LRESULT CALLBACK WndProc(HWND hWnd, const UINT message, const WPARAM wParam, con
                 }
             }
             break;
+        case WM_MOUSEMOVE:
+            {
+                RECT windowRect;
+
+                GetWindowRect(hWnd, &windowRect);
+                const int xPos = LOWORD(lParam);
+                const int yPos = HIWORD(lParam);
+
+                const int windowCenterX = static_cast<int>(instance->GetClientWidth()) / 2;
+                const int windowCenterY = static_cast<int>(instance->GetClientHeight()) / 2;
+
+                const float diffX = xPos - windowCenterX;
+                const float diffY = yPos - windowCenterY;
+
+                instance->m_demo->MouseMoved(diffX, diffY);
+
+                POINT centerPoint = { windowCenterX , windowCenterY};
+                MapWindowPoints(hWnd, nullptr, &centerPoint, 1);
+
+                SetCursorPos(centerPoint.x, centerPoint.y);
+            }
+            break;
         case WM_DESTROY:
+            instance->m_demo->GetGraphics()->GetCommandQueue()->Flush();
             PostQuitMessage(0);
             break;
         default:

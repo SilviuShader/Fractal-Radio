@@ -21,3 +21,7 @@ shared_ptr<Graphics> Demo::GetGraphics() const
 void Demo::Resize(uint32_t, uint32_t)
 {
 }
+
+void Demo::MouseMoved(float, float)
+{
+}

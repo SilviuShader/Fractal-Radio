@@ -1,4 +1,5 @@
 #pragma once
+#include "Camera.h"
 #include "Demo.h"
 
 class FractalRadio final : public Demo
@@ -6,6 +7,7 @@ class FractalRadio final : public Demo
     struct RayMarcherBuffer
     {
         DirectX::XMFLOAT2 WindowSize;
+        DirectX::XMMATRIX CameraMatrix;
     };
 
 public:
@@ -19,8 +21,9 @@ public:
     explicit FractalRadio(std::shared_ptr<Graphics>);
 
     void Resize(uint32_t, uint32_t) override;
+    void MouseMoved(float, float)   override;
 
-    void Update()                   override;
+    void Update(float)              override;
     void Render()                   override;
 
 private:
@@ -47,4 +50,6 @@ private:
                                                  
     D3D12_VERTEX_BUFFER_VIEW                     m_vertexBufferView{};
     D3D12_INDEX_BUFFER_VIEW                      m_indexBufferView{};
+
+    std::unique_ptr<Camera>                      m_camera;
 };

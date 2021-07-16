@@ -13,10 +13,11 @@ public:
 
             std::shared_ptr<Graphics> GetGraphics() const;
 
-    virtual void                      Update() = 0;
-    virtual void                      Render() = 0;
+    virtual void                      Update(float) = 0;
+    virtual void                      Render()      = 0;
 
     virtual void                      Resize(uint32_t, uint32_t);
+    virtual void                      MouseMoved(float, float);
 
 protected:
 

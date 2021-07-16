@@ -1,6 +1,6 @@
 #pragma once
 
-#include <functional>
+#include <chrono>
 
 #include "Demo.h"
 
@@ -32,20 +32,22 @@ public:
 
 private:
 
-           HWND                             CreateWindow(const wchar_t*, HINSTANCE, const wchar_t*, uint32_t, uint32_t) const;
-    static void                             RegisterWindowClass(HINSTANCE, const wchar_t*);
-    
-    friend LRESULT CALLBACK                 WndProc(HWND, UINT, WPARAM, LPARAM);
-
-
-    HWND                                    m_hWnd;
-    bool                                    m_fullscreen;
-    RECT                                    m_windowRect;
-    std::shared_ptr<Demo>                   m_demo;
-
-    uint32_t                                m_clientWidth;
-    uint32_t                                m_clientHeight;
+           HWND                                    CreateWindow(const wchar_t*, HINSTANCE, const wchar_t*, uint32_t, uint32_t) const;
+    static void                                    RegisterWindowClass(HINSTANCE, const wchar_t*);
+                                                   
+    friend LRESULT CALLBACK                        WndProc(HWND, UINT, WPARAM, LPARAM);
+                                                   
+                                                   
+    HWND                                           m_hWnd;
+    bool                                           m_fullscreen;
+    RECT                                           m_windowRect;
+    std::shared_ptr<Demo>                          m_demo;
+                                                   
+    uint32_t                                       m_clientWidth;
+    uint32_t                                       m_clientHeight;
 
     // ReSharper disable once CppInconsistentNaming
-    static Window*                          g_instance;
+    static Window*                                 g_instance;
+
+    std::chrono::high_resolution_clock::time_point m_lastTimePoint;
 };

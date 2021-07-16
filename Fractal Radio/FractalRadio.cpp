@@ -51,6 +51,8 @@ FractalRadio::FractalRadio(const shared_ptr<Graphics> graphics) :
 
     commandQueue->ExecuteCommandList(commandList);
     commandQueue->Flush();
+
+    m_camera = make_unique<Camera>();
 }
 
 void FractalRadio::Resize(uint32_t width, uint32_t height)
@@ -60,8 +62,30 @@ void FractalRadio::Resize(uint32_t width, uint32_t height)
     CreateRayMarcherTexture(m_graphics->GetDevice());
 }
 
-void FractalRadio::Update()
+void FractalRadio::MouseMoved(float diffX, float diffY)
 {
+    m_camera->MouseMoved(diffX, diffY);
+}
+
+void FractalRadio::Update(float deltaTime)
+{
+    static uint64_t frameCounter = 0;
+    frameCounter++;
+    static double elapsedSeconds = 0.0;
+    elapsedSeconds += deltaTime;
+
+    if (elapsedSeconds > 1.0)
+    {
+        char buffer[500];
+        auto fps = frameCounter / elapsedSeconds;
+        sprintf_s(buffer, 500, "FPS: %f\n", fps);
+        OutputDebugStringA(buffer);
+
+        frameCounter = 0;
+        elapsedSeconds = 0.0;
+    }
+
+    m_camera->Update(deltaTime);
 }
 
 void FractalRadio::Render()
@@ -71,18 +95,18 @@ void FractalRadio::Render()
     auto commandQueue = m_graphics->GetCommandQueue();
     auto commandList = commandQueue->GetCommandList();
 
-    PIXBeginEvent(commandList.Get(), (UINT64)0, L"FractalStart");
+    //PIXBeginEvent(commandList.Get(), (UINT64)0, L"FractalStart");
 
     RenderFractal(commandList);
 
-    PIXBeginEvent(commandList.Get(), (UINT64)0, L"FractalEnd");
+    //PIXBeginEvent(commandList.Get(), (UINT64)0, L"FractalEnd");
 
     commandQueue->ExecuteCommandList(commandList);
     commandQueue->Flush();
 
     commandList = m_graphics->BeginFrame();
 
-    PIXBeginEvent(commandList.Get(), (UINT64)0, L"FrameStart");
+    //PIXBeginEvent(commandList.Get(), (UINT64)0, L"FrameStart");
 
     m_graphics->ClearRenderTarget(commandList, clearColor);
 
@@ -120,7 +144,7 @@ void FractalRadio::Render()
 
     commandList->ResourceBarrier(1, &barrier2);
 
-    PIXBeginEvent(commandList.Get(), (UINT64)1000, L"FrameEnd");
+    //PIXBeginEvent(commandList.Get(), (UINT64)1000, L"FrameEnd");
 
     m_graphics->EndFrame(commandList);
 }
@@ -150,6 +174,7 @@ void FractalRadio::RenderFractal(ComPtr<ID3D12GraphicsCommandList2> commandList)
 
     RayMarcherBuffer rayMarcherData;
     rayMarcherData.WindowSize = XMFLOAT2(Window::GetInstance()->GetClientWidth(), Window::GetInstance()->GetClientHeight());
+    rayMarcherData.CameraMatrix = m_camera->GetMatrix();
     commandList->SetComputeRoot32BitConstants(0, sizeof(RayMarcherBuffer) / 4, &rayMarcherData, 0);
     
     commandList->SetComputeRootDescriptorTable(

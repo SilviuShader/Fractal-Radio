@@ -1,6 +1,6 @@
 #define BLOCK_SIZE 8
-#define MAX_STEPS 64
-#define MINIMUM_DISTANCE 0.01f
+#define MAX_STEPS 16
+#define MINIMUM_DISTANCE 0.05f
 #define NORMAL_THRESHOLD 1.0f
 
 #define LIGHT_DIRECTION float3(-0.5f, -0.5f, 0.5f)
@@ -16,6 +16,7 @@ struct ComputeShaderInput
 cbuffer RayMarcherContrantBuffer : register(b0)
 {
     float2 g_windowSize;
+    matrix g_cameraMatrix;
 }
 
 RWTexture2D<float4> g_outputTexture : register(u0);
@@ -74,10 +75,17 @@ void main(ComputeShaderInput IN)
     normalizedCoords.x *= g_windowSize.x / g_windowSize.y;
     normalizedCoords.y *= -1.0f;
     
-    float3 onCameraPoint = float3(normalizedCoords.x, normalizedCoords.y, 0.0f);
-    float3 eye = float3(0.0f, 0.0f, -5.0f);
+    float3 onCameraPoint = float3(normalizedCoords.x, normalizedCoords.y, 5.0f);
+    float3 eye = float3(0.0f, 0.0f, 0.0f);
 
-    float3 rayDirection = normalize(onCameraPoint - eye);
+    float3 rayDirection = onCameraPoint - eye;
+
+    eye = mul(g_cameraMatrix, float4(eye, 1.0f)).xyz;
+    rayDirection = mul(g_cameraMatrix, float4(rayDirection, 0.0f)).xyz;
+    onCameraPoint = eye + rayDirection;
+
+    rayDirection = normalize(rayDirection);
+
     float resultTone = Trace(onCameraPoint, rayDirection);
 
 
