@@ -29,6 +29,7 @@ public:
 
     std::shared_ptr<CommandQueue>                      GetCommandQueue()                                                             const;
     Microsoft::WRL::ComPtr<ID3D12Device2>              GetDevice()                                                                   const;
+    size_t                                             GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE)                  const;
 
 private:
 

@@ -207,6 +207,11 @@ ComPtr<ID3D12Device2> Graphics::GetDevice() const
     return m_device;
 }
 
+size_t Graphics::GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE type) const
+{
+    return m_device->GetDescriptorHandleIncrementSize(type);
+}
+
 void Graphics::FreeBackBuffers()
 {
     if (m_backBuffers)

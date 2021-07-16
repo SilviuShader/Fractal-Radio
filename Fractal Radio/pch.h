@@ -48,6 +48,7 @@
 
 #ifdef _DEBUG
 #include <dxgidebug.h>
+#include "pix3.h"
 #endif
 
 namespace DX
