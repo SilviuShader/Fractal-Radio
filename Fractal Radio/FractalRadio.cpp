@@ -147,9 +147,13 @@ void FractalRadio::RenderFractal(ComPtr<ID3D12GraphicsCommandList2> commandList)
         D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
     commandList->ResourceBarrier(1, &barrier);
+
+    RayMarcherBuffer rayMarcherData;
+    rayMarcherData.WindowSize = XMFLOAT2(Window::GetInstance()->GetClientWidth(), Window::GetInstance()->GetClientHeight());
+    commandList->SetComputeRoot32BitConstants(0, sizeof(RayMarcherBuffer) / 4, &rayMarcherData, 0);
     
     commandList->SetComputeRootDescriptorTable(
-        0,
+        1,
         m_fractalTextureDescriptorUavHeap->GetGPUDescriptorHandleForHeapStart());
     
     commandList->Dispatch(GetComputerShaderGroupsCount(Window::GetInstance()->GetClientWidth(), 8),
@@ -170,11 +174,12 @@ void FractalRadio::CreateRayMarcherPipeline(ComPtr<ID3D12Device2> device)
     CD3DX12_DESCRIPTOR_RANGE1 textureUav(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0,
                                          D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 
-    CD3DX12_ROOT_PARAMETER1 rootParameters[1] = {};
-    rootParameters[0].InitAsDescriptorTable(1, &textureUav);
+    CD3DX12_ROOT_PARAMETER1 rootParameters[2] = {};
+    rootParameters[0].InitAsConstants(sizeof RayMarcherBuffer / 4, 0, 0, D3D12_SHADER_VISIBILITY_ALL);
+    rootParameters[1].InitAsDescriptorTable(1, &textureUav);
 
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc(
-        1, rootParameters,
+        2, rootParameters,
         0, nullptr
     );
 

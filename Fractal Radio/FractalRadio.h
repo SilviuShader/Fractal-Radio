@@ -3,6 +3,11 @@
 
 class FractalRadio final : public Demo
 {
+    struct RayMarcherBuffer
+    {
+        DirectX::XMFLOAT2 WindowSize;
+    };
+
 public:
 
     struct Vertex
