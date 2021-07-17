@@ -140,6 +140,11 @@ uint32_t Window::GetClientHeight() const
     return m_clientHeight;
 }
 
+bool Window::IsKeyPressed(char key)
+{
+    return GetKeyState(key) & 0x8000;
+}
+
 // Based on https://www.3dgep.com/learning-directx-12-1/#create-window-instance
 // ReSharper disable once CppParameterMayBeConst
 HWND Window::CreateWindow(const wchar_t* windowClassName, HINSTANCE hInstance, const wchar_t* windowTitle,

@@ -2,6 +2,8 @@
 
 #include "Camera.h"
 
+#include "Window.h"
+
 using namespace DirectX;
 
 constexpr auto MOVE_SPEED  = 10.0f;
@@ -13,61 +15,35 @@ Camera::Camera() :
 {
 }
 
-void Camera::Update(float deltaTime)
+void Camera::Update(const float deltaTime)
 {
-    auto translation = XMFLOAT3(0.0f, 0.0f, 0.0f);
     XMMATRIX rotationMatrix = XMMatrixRotationX(m_rotation.x);
     rotationMatrix = XMMatrixMultiply(rotationMatrix, XMMatrixRotationY(m_rotation.y));
 
-    if (GetKeyState('W') & 0x8000)
-    {
-        auto dir = XMFLOAT4(0.0f, 0.0f, 1.0f, 0.0f);
-        auto loadedVec = XMLoadFloat4(&dir);
-        auto newVec = XMVector4Transform(loadedVec, rotationMatrix);
-        XMStoreFloat4(&dir, newVec);
+    auto translation = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
 
-        translation = XMFLOAT3(translation.x + dir.x, translation.y + dir.y, translation.z + dir.z);
-    }
+    if (Window::IsKeyPressed('W'))
+        translation = XMFLOAT4(translation.x, translation.y, translation.z + 1.0f, translation.w);
 
-    if (GetKeyState('A') & 0x8000)
-    {
-        auto dir = XMFLOAT4(-1.0f, 0.0f, 0.0f, 0.0f);
-        auto loadedVec = XMLoadFloat4(&dir);
-        auto newVec = XMVector4Transform(loadedVec, rotationMatrix);
-        XMStoreFloat4(&dir, newVec);
+    if (Window::IsKeyPressed('A'))
+        translation = XMFLOAT4(translation.x - 1.0f, translation.y, translation.z, translation.w);
 
-        translation = XMFLOAT3(translation.x + dir.x, translation.y + dir.y, translation.z + dir.z);
-    }
+    if (Window::IsKeyPressed('S'))
+        translation = XMFLOAT4(translation.x, translation.y, translation.z - 1.0f, translation.w);
 
-    if (GetKeyState('S') & 0x8000)
-    {
-        auto dir = XMFLOAT4(0.0f, 0.0f, -1.0f, 0.0f);
-        auto loadedVec = XMLoadFloat4(&dir);
-        auto newVec = XMVector4Transform(loadedVec, rotationMatrix);
-        XMStoreFloat4(&dir, newVec);
+    if (Window::IsKeyPressed('D'))
+        translation = XMFLOAT4(translation.x + 1.0f, translation.y, translation.z, translation.w);
 
-        translation = XMFLOAT3(translation.x + dir.x, translation.y + dir.y, translation.z + dir.z);
-    }
-
-    if (GetKeyState('D') & 0x8000)
-    {
-        auto dir = XMFLOAT4(1.0f, 0.0f, 0.0f, 0.0f);
-        auto loadedVec = XMLoadFloat4(&dir);
-        auto newVec = XMVector4Transform(loadedVec, rotationMatrix);
-        XMStoreFloat4(&dir, newVec);
-
-        translation = XMFLOAT3(translation.x + dir.x, translation.y + dir.y, translation.z + dir.z);
-    }
-
-    auto loadedVec = XMLoadFloat3(&translation);
-    auto normalizedVec = XMVector3Normalize(loadedVec);
-    auto speedVec = normalizedVec * MOVE_SPEED * deltaTime;
-    XMStoreFloat3(&translation, speedVec);
+    const auto loadedTranslation = XMLoadFloat4(&translation);
+    const auto transformedTranslation = XMVector4Transform(loadedTranslation, rotationMatrix);
+    const auto normalizedTranslation = XMVector3Normalize(transformedTranslation);
+    const auto speedVec = normalizedTranslation * MOVE_SPEED * deltaTime;
+    XMStoreFloat4(&translation, speedVec);
 
     m_position = XMFLOAT3(m_position.x + translation.x, m_position.y + translation.y, m_position.z + translation.z);
 }
 
-void Camera::MouseMoved(float diffX, float diffY)
+void Camera::MouseMoved(const float diffX, const float diffY)
 {
     m_rotation.x += diffY * MOUSE_SPEED;
     m_rotation.y += diffX * MOUSE_SPEED;

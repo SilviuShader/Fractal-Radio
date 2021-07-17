@@ -20,11 +20,13 @@ public:
 
            void     SetFullscreen(bool);
 
-           RECT     GetRect()         const;
-           HWND     GetHWnd()         const;
+           RECT     GetRect()          const;
+           HWND     GetHWnd()          const;
 
-           uint32_t GetClientWidth()  const;
-           uint32_t GetClientHeight() const;
+           uint32_t GetClientWidth()   const;
+           uint32_t GetClientHeight()  const;
+
+    static bool     IsKeyPressed(char);
     
     static void     CreateInstance(HINSTANCE, const wchar_t*, uint32_t, uint32_t);
     static Window*  GetInstance();
