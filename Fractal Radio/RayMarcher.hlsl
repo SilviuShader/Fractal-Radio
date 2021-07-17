@@ -1,7 +1,11 @@
 #define BLOCK_SIZE 8
-#define MAX_STEPS 16
-#define MINIMUM_DISTANCE 0.05f
-#define NORMAL_THRESHOLD 1.0f
+#define MAX_STEPS 64
+#define MINIMUM_DISTANCE 0.01f
+#define NORMAL_THRESHOLD 0.1f
+#define SIERPINSKI_ITERATIONS 10
+#define MAX_CAMERA_DEPTH 100.0f
+#define GLOW_FACTOR 0.5f
+#define MAX_RAYS_DEPTH 5
 
 #define LIGHT_DIRECTION float3(-0.5f, -0.5f, 0.5f)
 
@@ -21,17 +25,62 @@ cbuffer RayMarcherContrantBuffer : register(b0)
 
 RWTexture2D<float4> g_outputTexture : register(u0);
 
-float SphereEstimator(float3 crtPosition, float3 spherePosition)
+struct TraceResult
 {
-    return length(crtPosition - spherePosition) - 1.0f;
+    float AmbientOcclusion;
+    bool Hit;
+    float3 Normal;
+    float3 Color;
+    int NumSteps;
+    bool Blocked;
+};
+
+float SphereEstimator(float3 crtPosition, float3 spherePosition, float radius)
+{
+    return length(crtPosition - spherePosition) - radius;
+}
+
+float SpheresEstimator(float3 crtPosition, float3 spherePosition)
+{
+    float3 z = crtPosition - spherePosition;
+    z.xz = fmod((z.xz), 1.0f) - float2(0.5f, 0.5f);
+    return length(z) - 0.3f;
+}
+
+
+float Sierpinski(float3 crtPosition, float3 tetrahedronPosition)
+{
+    float3 z = crtPosition - tetrahedronPosition;
+
+    float r;
+    int n = 0;
+    float scale = 2.0f;
+    while (n < SIERPINSKI_ITERATIONS) {
+        if (z.x + z.y < 0) z.xy = -z.yx; // fold 1
+        if (z.x + z.z < 0) z.xz = -z.zx; // fold 2
+        if (z.y + z.z < 0) z.zy = -z.yz; // fold 3	
+        z = z * scale - float3(1.0f, 1.0f, 1.0f) * (scale - 1.0);
+        n++;
+    }
+    return (length(z)) * pow(scale, -float(n));
+}
+
+float YPlane(float3 crtPosition, float y)
+{
+    return crtPosition.y - y;
 }
 
 float DistanceEstimator(float3 position)
 {
-    return SphereEstimator(position, float3(0.0f, 0.0f, 20.0f));
+    return min(SpheresEstimator(position, float3(0.0f, 1.0f, 3.0f)), YPlane(position, -1.0f));
 }
 
-float Trace(float3 from, float3 direction)
+float3 Reflect(const float3 I, const float3 N)
+{
+    return I - 2 * dot(I, N) * N;
+}
+
+bool IsBlocked(float3 from, float3 direction)
 {
     float totalDistance = 0.0f;
     int steps;
@@ -42,30 +91,130 @@ float Trace(float3 from, float3 direction)
         float distance = DistanceEstimator(crtPoint);
         totalDistance += distance;
         if (distance < MINIMUM_DISTANCE)
+            return true;
+        if (distance > MAX_CAMERA_DEPTH)
+            return false;
+    }
+
+    return false;
+}
+
+TraceResult IterativeTrace(float3 from, float3 direction)
+{
+    TraceResult intersectionsStack[MAX_RAYS_DEPTH];
+    int stackLength = 0;
+    bool stillGoing = true;
+
+    for (int depth = 0; depth < MAX_RAYS_DEPTH && stillGoing; depth++)
+    {
+        int steps;
+        float totalDistance = 0.0f;
+        bool stopped = false;
+
+        for (steps = 0; steps < MAX_STEPS; steps++)
         {
-            const float ambientOcclusion = 1.0 - float(steps) / float(MAX_STEPS);
+            float3 crtPoint = from + totalDistance * direction;
+            float distance = DistanceEstimator(crtPoint);
+            totalDistance += distance;
+            if (distance < MINIMUM_DISTANCE)
+            {
+                const float ambientOcclusion = 1.0 - float(steps) / float(MAX_STEPS);
 
-            float3 xyy = float3(1.0f, -1.0f, -1.0f);
-            float3 xyx = float3(-1.0f, 1.0f, -1.0f);
-            float3 yyx = float3(-1.0f, -1.0f, 1.0f);
-            float3 xxx = float3(1.0f, 1.0f, 1.0f);
-            
-            float3 normal = xyy * DistanceEstimator(crtPoint + xyy * NORMAL_THRESHOLD) + 
-                            xyx * DistanceEstimator(crtPoint + xyx * NORMAL_THRESHOLD) + 
-                            yyx * DistanceEstimator(crtPoint + yyx * NORMAL_THRESHOLD) +
-                            xxx * DistanceEstimator(crtPoint + xxx * NORMAL_THRESHOLD);
+                float3 xyy = float3(1.0f, -1.0f, -1.0f);
+                float3 xyx = float3(-1.0f, 1.0f, -1.0f);
+                float3 yyx = float3(-1.0f, -1.0f, 1.0f);
+                float3 xxx = float3(1.0f, 1.0f, 1.0f);
 
-            normal = normalize(normal);
+                float3 normal = xyy * DistanceEstimator(crtPoint + xyy * NORMAL_THRESHOLD) +
+                    xyx * DistanceEstimator(crtPoint + xyx * NORMAL_THRESHOLD) +
+                    yyx * DistanceEstimator(crtPoint + yyx * NORMAL_THRESHOLD) +
+                    xxx * DistanceEstimator(crtPoint + xxx * NORMAL_THRESHOLD);
 
-            float3 lightDirection = normalize(-LIGHT_DIRECTION);
-            float lightIntensity = dot(normal, lightDirection);
+                normal = normalize(normal);
 
-            resultTone = lightIntensity * ambientOcclusion;
-            break;
+                TraceResult crtResult;
+                crtResult.Hit = true;
+                crtResult.Normal = normal;
+                crtResult.AmbientOcclusion = ambientOcclusion;
+                crtResult.Color = float3(1.0f, 1.0f, 1.0f);
+                crtResult.NumSteps = steps;
+
+                
+                float3 reflected = Reflect(direction, normal);
+                from = crtPoint + reflected * 0.1f;
+                direction = reflected;
+                float lightDirection = normalize(-LIGHT_DIRECTION);
+                float3 toLight = crtPoint + lightDirection * 1.0f;
+                crtResult.Blocked = IsBlocked(toLight, lightDirection);
+
+                intersectionsStack[stackLength++] = crtResult;
+
+                stopped = true;
+
+                break;
+            }
+
+            if (distance > MAX_CAMERA_DEPTH)
+            {
+                TraceResult crtResult;
+                crtResult.Hit = false;
+                crtResult.AmbientOcclusion = 0.0f;
+                crtResult.Normal = direction;
+                crtResult.Color = float3(0.0f, 0.0f, 0.0f);
+                crtResult.NumSteps = steps;
+                crtResult.Blocked = false;
+                intersectionsStack[stackLength++] = crtResult;
+                stillGoing = false;
+
+                stopped = true;
+
+                break;
+            }
+        }
+
+        if (!stopped)
+        {
+            TraceResult crtResult;
+            crtResult.Hit = false;
+            crtResult.AmbientOcclusion = 0.0f;
+            crtResult.Normal = direction;
+            crtResult.Color = float3(0.0f, 0.0f, 0.0f);
+            crtResult.NumSteps = steps;
+            crtResult.Blocked = false;
+            intersectionsStack[stackLength++] = crtResult;
+            stillGoing = false;
         }
     }
 
-    return resultTone;
+    TraceResult finalResult;
+    finalResult.Color = float3(0.0f, 0.0f, 0.0f);
+
+    for (int i = 0; i >= 0; i--)
+    {
+        TraceResult crtResult = intersectionsStack[i];
+
+        float3 lightDirection = normalize(-LIGHT_DIRECTION);
+        float lightIntensity = max(0.1f, dot(crtResult.Normal, lightDirection));
+        float color = crtResult.AmbientOcclusion * lightIntensity;
+
+        crtResult.Color = color;
+
+        if (crtResult.Blocked)
+            crtResult.Color *= 0.5f;
+
+        finalResult.Color += crtResult.Color;
+        finalResult.Hit = crtResult.Hit;
+        finalResult.Normal = crtResult.Normal;
+        finalResult.AmbientOcclusion = crtResult.AmbientOcclusion;
+        finalResult.NumSteps = crtResult.NumSteps;
+
+        intersectionsStack[i] = crtResult;
+    }
+
+    //if (intersectionsStack[1].Hit)
+        //finalResult.Color = float3(0.0f, 0.0f, 1.0f);
+
+    return finalResult;
 }
 
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
@@ -86,8 +235,7 @@ void main(ComputeShaderInput IN)
 
     rayDirection = normalize(rayDirection);
 
-    float resultTone = Trace(onCameraPoint, rayDirection);
+    TraceResult result = IterativeTrace(onCameraPoint, rayDirection);
 
-
-    g_outputTexture[IN.DispatchThreadId.xy] = float4(resultTone, resultTone, resultTone, 1.0f);
+    g_outputTexture[IN.DispatchThreadId.xy] = float4(result.Color, 1.0f);
 }
